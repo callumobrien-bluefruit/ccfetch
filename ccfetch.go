@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 )
 
 type Secrets struct {
@@ -15,7 +16,8 @@ type Secrets struct {
 
 func main() {
 	host, username, password := readSecrets()
-	fmt.Println(host, username, password)
+	statisticsJson := getStatisticsJson(host, username, password)
+	fmt.Println(statisticsJson)
 }
 
 func readSecrets() (host string, username string, password string) {
@@ -33,4 +35,29 @@ func readSecrets() (host string, username string, password string) {
 	}
 
 	return secrets.Host, secrets.Username, secrets.Password
+}
+
+func getStatisticsJson(host string, username string, password string) []byte {
+	const endpoint string = "app/rest/builds/status:SUCCESS,branch:master,buildType:(id:WatsonMarlowPims_Absw),count:1/statistics"
+
+	req, err := http.NewRequest("GET", host + endpoint, nil)
+	if err != nil {
+		log.Fatal("Failed to create GET request. Error: ", err)
+	}
+	req.SetBasicAuth(username, password)
+	req.Header.Add("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal("Failed to get statistics from TeamCity. Error: ", err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal("Failed to read response body. Error: ", err)
+	}
+
+	return body
 }
