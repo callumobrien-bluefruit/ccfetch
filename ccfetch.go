@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -35,7 +36,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(statistics)
+	property, err := statistics.findProperty("HmiTestsOpenCppCoverage")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(property)
 }
 
 func readSecrets() (Secrets, error) {
@@ -83,4 +89,13 @@ func fetchStatistics(secrets Secrets) (Statistics, error) {
 	}
 
 	return statistics, nil
+}
+
+func (s Statistics) findProperty(propertyName string) (Property, error) {
+	for _, property := range s.Properties {
+		if property.Name == propertyName {
+			return property, nil
+		}
+	}
+	return Property{}, errors.New("Could not find property")
 }
