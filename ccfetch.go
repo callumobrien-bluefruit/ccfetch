@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type Secrets struct {
@@ -36,12 +37,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	property, err := statistics.findProperty("HmiTestsOpenCppCoverage")
+	codeCoveragePropertyNames := []string{
+		"HmiBootloaderTestsOpenCppCoverage",
+		"HmiTestsOpenCppCoverage",
+		"HmiScreenTestsOpenCppCoverage",
+		"IoBoardTestsOpenCppCoverage",
+		"MainBoardTestsOpenCppCoverage",
+	}
+
+	codeCoverage, err := statistics.extractCodeCoverage(codeCoveragePropertyNames)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(property)
+	fmt.Println(codeCoverage)
 }
 
 func readSecrets() (Secrets, error) {
@@ -51,7 +60,6 @@ func readSecrets() (Secrets, error) {
 	if err != nil {
 		return Secrets{}, err
 	}
-
 	var secrets Secrets
 	err = json.Unmarshal(secretsJson, &secrets)
 	if err != nil {
@@ -76,7 +84,6 @@ func fetchStatistics(secrets Secrets) (Statistics, error) {
 	if err != nil {
 		return Statistics{}, err
 	}
-
 	statisticsJson, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return Statistics{}, err
@@ -91,11 +98,30 @@ func fetchStatistics(secrets Secrets) (Statistics, error) {
 	return statistics, nil
 }
 
+func (s Statistics) extractCodeCoverage(propertyNames []string) (map[string]float64, error) {
+	codeCoverage := make(map[string]float64)
+
+	for _, propertyName := range(propertyNames) {
+		property, err := s.findProperty(propertyName)
+		if err != nil {
+			return codeCoverage, err
+		}
+		value, err := strconv.ParseFloat(property.Value, 64)
+		if err != nil {
+			return codeCoverage, err
+		}
+
+		codeCoverage[propertyName] = value
+	}
+
+	return codeCoverage, nil
+}
+
 func (s Statistics) findProperty(propertyName string) (Property, error) {
 	for _, property := range s.Properties {
 		if property.Name == propertyName {
 			return property, nil
 		}
 	}
-	return Property{}, errors.New("Could not find property")
+	return Property{}, errors.New("Could not find property " + propertyName)
 }
