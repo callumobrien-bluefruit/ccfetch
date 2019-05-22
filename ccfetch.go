@@ -14,10 +14,20 @@ type Secrets struct {
 	Password string `json:"password"`
 }
 
+type Statistics struct {
+	Count int `json:"count"`
+	Properties []Property `json:"property"`
+}
+
+type Property struct {
+	Name string `json:"name"`
+	Value string `json:"value"`
+}
+
 func main() {
 	host, username, password := readSecrets()
-	statisticsJson := getStatisticsJson(host, username, password)
-	fmt.Println(statisticsJson)
+	statistics := fetchStatistics(host, username, password)
+	fmt.Println(statistics)
 }
 
 func readSecrets() (host string, username string, password string) {
@@ -37,7 +47,7 @@ func readSecrets() (host string, username string, password string) {
 	return secrets.Host, secrets.Username, secrets.Password
 }
 
-func getStatisticsJson(host string, username string, password string) []byte {
+func fetchStatistics(host string, username string, password string) Statistics {
 	const endpoint string = "app/rest/builds/status:SUCCESS,branch:master,buildType:(id:WatsonMarlowPims_Absw),count:1/statistics"
 
 	req, err := http.NewRequest("GET", host + endpoint, nil)
@@ -53,11 +63,16 @@ func getStatisticsJson(host string, username string, password string) []byte {
 		log.Fatal("Failed to get statistics from TeamCity. Error: ", err)
 	}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	statisticsJson, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal("Failed to read response body. Error: ", err)
 	}
 
-	return body
+	var statistics Statistics
+	err = json.Unmarshal(statisticsJson, &statistics)
+	if err != nil {
+		log.Fatal("Failed to parse statistics JSON from TeamCity. Error: ", err)
+	}
+
+	return statistics
 }
