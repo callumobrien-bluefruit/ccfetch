@@ -25,54 +25,62 @@ type Property struct {
 }
 
 func main() {
-	host, username, password := readSecrets()
-	statistics := fetchStatistics(host, username, password)
+	secrets, err := readSecrets()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	statistics, err := fetchStatistics(secrets)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	fmt.Println(statistics)
 }
 
-func readSecrets() (host string, username string, password string) {
+func readSecrets() (Secrets, error) {
 	const secretsPath string = "secrets.json"
 
 	secretsJson, err := ioutil.ReadFile(secretsPath)
 	if err != nil {
-		log.Fatal("Failed to read secrets.json. Error: ", err)
+		return Secrets{}, err
 	}
 
 	var secrets Secrets
 	err = json.Unmarshal(secretsJson, &secrets)
 	if err != nil {
-		log.Fatal("Failed to parse secrets.json. Error: ", err)
+		return Secrets{}, err
 	}
 
-	return secrets.Host, secrets.Username, secrets.Password
+	return secrets, nil
 }
 
-func fetchStatistics(host string, username string, password string) Statistics {
+func fetchStatistics(secrets Secrets) (Statistics, error) {
 	const endpoint string = "app/rest/builds/status:SUCCESS,branch:master,buildType:(id:WatsonMarlowPims_Absw),count:1/statistics"
 
-	req, err := http.NewRequest("GET", host + endpoint, nil)
+	req, err := http.NewRequest("GET", secrets.Host + endpoint, nil)
 	if err != nil {
-		log.Fatal("Failed to create GET request. Error: ", err)
+		return Statistics{}, err
 	}
-	req.SetBasicAuth(username, password)
+	req.SetBasicAuth(secrets.Username, secrets.Password)
 	req.Header.Add("Accept", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal("Failed to get statistics from TeamCity. Error: ", err)
+		return Statistics{}, err
 	}
 
 	statisticsJson, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal("Failed to read response body. Error: ", err)
+		return Statistics{}, err
 	}
 
 	var statistics Statistics
 	err = json.Unmarshal(statisticsJson, &statistics)
 	if err != nil {
-		log.Fatal("Failed to parse statistics JSON from TeamCity. Error: ", err)
+		return Statistics{}, err
 	}
 
-	return statistics
+	return statistics, nil
 }
