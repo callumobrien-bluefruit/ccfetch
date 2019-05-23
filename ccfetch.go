@@ -49,8 +49,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	codeCoverageJson, err := json.MarshalIndent(codeCoverage, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	fmt.Println(codeCoverage)
+	fmt.Println(string(codeCoverageJson))
 }
 
 func readSecrets() (Secrets, error) {
