@@ -3,17 +3,24 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 )
 
 type Secrets struct {
-	Host string `json:"host"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type Options struct {
+	Host string
+	BuildTypeId string
+	PropertyNames []string
 }
 
 type Statistics struct {
@@ -27,34 +34,53 @@ type Property struct {
 }
 
 func main() {
+	options, err := getOptions()
+	if err != nil {
+		os.Exit(1)
+	}
+
 	secrets, err := readSecrets()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	statistics, err := fetchStatistics(secrets)
+	statistics, err := fetchStatistics(options.Host, options.BuildTypeId, secrets)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	codeCoveragePropertyNames := []string{
-		"HmiBootloaderTestsOpenCppCoverage",
-		"HmiTestsOpenCppCoverage",
-		"HmiScreenTestsOpenCppCoverage",
-		"IoBoardTestsOpenCppCoverage",
-		"MainBoardTestsOpenCppCoverage",
-	}
-
-	codeCoverage, err := statistics.extractCodeCoverage(codeCoveragePropertyNames)
+	codeCoverage, err := statistics.extractCodeCoverage(options.PropertyNames)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 	codeCoverageJson, err := json.MarshalIndent(codeCoverage, "", "  ")
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
 	fmt.Println(string(codeCoverageJson))
+}
+
+func getOptions() (Options, error) {
+	var options Options
+	flag.StringVar(&options.Host, "host", "http://127.0.0.1/", "The address of your TeamCity server")
+	flag.StringVar(&options.BuildTypeId, "id", "", "The ID of the build type to fetch properties for")
+	propertyNamesList := flag.String("props", "", "A colon-seperated list of the names of the properties to fetch")
+
+	flag.Parse()
+
+	if options.BuildTypeId == "" || *propertyNamesList == "" {
+		flag.Usage()
+		return Options{}, errors.New("Invalid command-line options")
+	}
+
+	options.PropertyNames = strings.Split(*propertyNamesList, ":")
+
+	return options, nil
 }
 
 func readSecrets() (Secrets, error) {
@@ -73,10 +99,9 @@ func readSecrets() (Secrets, error) {
 	return secrets, nil
 }
 
-func fetchStatistics(secrets Secrets) (Statistics, error) {
-	const endpoint string = "app/rest/builds/status:SUCCESS,branch:master,buildType:(id:WatsonMarlowPims_Absw),count:1/statistics"
-
-	req, err := http.NewRequest("GET", secrets.Host + endpoint, nil)
+func fetchStatistics(host, buildTypeId string, secrets Secrets) (Statistics, error) {
+	endpoint := "app/rest/builds/status:SUCCESS,branch:master,buildType:(id:" + buildTypeId + "),count:1/statistics"
+	req, err := http.NewRequest("GET", host + endpoint, nil)
 	if err != nil {
 		return Statistics{}, err
 	}
